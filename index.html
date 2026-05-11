@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>aliasfix — Verify Your Vercel Aliases Actually Work</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--slate-950:#0a0a0f;
+--slate-900:#111118;
+--slate-800:#1e1e2a;
+--slate-700:#2d2d3d;
+--slate-600:#3f3f52;
+--slate-500:#5a5a72;
+--slate-400:#8888a0;
+--slate-300:#b0b0c4;
+--slate-200:#d4d4e0;
+--slate-100:#ececf2;
+--amber-500:#f59e0b;
+--amber-400:#fbbf24;
+--amber-300:#fcd34d;
+--amber-600:#d97706;
+--amber-700:#b45309;
+--green-400:#4ade80;
+--green-500:#22c55e;
+--red-400:#f87171;
+--red-500:#ef4444;
+}
+html{scroll-behavior:smooth}
+body{
+font-family:'JetBrains Mono',monospace;
+background:var(--slate-950);
+color:var(--slate-200);
+overflow-x:hidden;
+line-height:1.6;
+}
+.step{
+min-height:100vh;
+display:none;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+padding:80px 24px 40px;
+opacity:0;
+transition:opacity 0.4s ease;
+}
+.step.active{display:flex;opacity:1}
+
+/* Step indicator */
+.step-indicator{
+position:fixed;top:0;left:0;right:0;z-index:100;
+background:rgba(10,10,15,0.92);
+backdrop-filter:blur(12px);
+border-bottom:1px solid var(--slate-800);
+padding:14px 24px;
+display:flex;align-items:center;justify-content:space-between;
+transition:transform 0.3s ease;
+}
+.step-indicator.hidden{transform:translateY(-100%)}
+.step-dots{display:flex;gap:8px;align-items:center}
+.step-dot{
+width:10px;height:10px;border-radius:50%;
+background:var(--slate-700);transition:all 0.3s ease;
+}
+.step-dot.active{background:var(--amber-500);box-shadow:0 0 10px rgba(245,158,11,0.4)}
+.step-dot.done{background:var(--green-500)}
+.step-label{font-size:13px;color:var(--slate-400)}
+.brand-sm{font-size:14px;color:var(--amber-500);font-weight:700;letter-spacing:1px}
+
+/* Progress bar */
+.progress-bar{
+position:fixed;top:52px;left:0;height:3px;z-index:101;
+background:linear-gradient(90deg,var(--amber-600),var(--amber-400));
+transition:width 0.5s cubic-bezier(.4,0,.2,1);
+border-radius:0 2px 2px 0;
+box-shadow:0 0 8px rgba(245,158,11,0.3);
+}
+
+/* Nav buttons */
+.nav-buttons{
+position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:100;
+display:flex;gap:12px;
+}
+.nav-buttons.hidden{display:none}
+.btn{
+padding:12px 28px;border:none;border-radius:8px;
+font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;
+cursor:pointer;transition:all 0.2s ease;
+}
+.btn-primary{
+background:var(--amber-500);color:var(--slate-950);
+box-shadow:0 4px 20px rgba(245,158,11,0.25);
+}
+.btn-primary:hover{background:var(--amber-400);transform:translateY(-1px);box-shadow:0 6px 24px rgba(245,158,11,0.35)}
+.btn-secondary{
+background:var(--slate-800);color:var(--slate-300);
+border:1px solid var(--slate-700);
+}
+.btn-secondary:hover{background:var(--slate-700);color:var(--slate-100)}
+.btn:disabled{opacity:0.3;cursor:not-allowed;transform:none!important}
+
+/* Badge */
+.badge{
+display:inline-block;padding:4px 14px;border-radius:20px;
+font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+background:rgba(245,158,11,0.12);color:var(--amber-400);
+border:1px solid rgba(245,158,11,0.2);
+margin-bottom:16px;
+}
+
+/* Hero */
+.hero-title{
+font-size:clamp(2.4rem,6vw,4.2rem);font-weight:800;
+text-align:center;line-height:1.15;margin-bottom:20px;
+background:linear-gradient(135deg,var(--slate-100) 0%,var(--amber-400) 50%,var(--slate-100) 100%);
+background-size:200% auto;
+-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+animation:shimmer 4s ease infinite;
+}
+@keyframes shimmer{0%,100%{background-position:0% center}50%{background-position:200% center}}
+.hero-sub{
+font-size:clamp(1rem,2vw,1.2rem);color:var(--slate-400);
+text-align:center;max-width:540px;margin-bottom:36px;line-height:1.7;
+}
+.hero-cta{font-size:16px;padding:16px 36px;border-radius:10px}
+
+/* Step content */
+.step-title{
+font-size:clamp(1.6rem,3.5vw,2.2rem);font-weight:700;
+text-align:center;margin-bottom:12px;color:var(--slate-100);
+}
+.step-desc{
+font-size:15px;color:var(--slate-400);text-align:center;
+max-width:520px;margin-bottom:32px;line-height:1.7;
+}
+
+/* Widget card */
+.widget{
+background:var(--slate-900);
+border:1px solid var(--slate-800);
+border-radius:16px;
+padding:28px;
+width:100%;
+max-width:580px;
+box-shadow:0 8px 40px rgba(0,0,0,0.3);
+}
+.widget-header{
+display:flex;align-items:center;gap:8px;
+margin-bottom:20px;padding-bottom:14px;
+border-bottom:1px solid var(--slate-800);
+}
+.dot-row{display:flex;gap:6px}
+.dot-r{width:10px;height:10px;border-radius:50%;background:#ef4444}
+.dot-y{width:10px;height:10px;border-radius:50%;background:#fbbf24}
+.dot-g{width:10px;height:10px;border-radius:50%;background:#22c55e}
+.widget-title{margin-left:auto;font-size:12px;color:var(--slate-500)}
+
+/* Step 1: Alias Input */
+.alias-input-group{display:flex;flex-direction:column;gap:12px}
+.alias-input{
+width:100%;padding:14px 16px;
+background:var(--slate-800);border:1px solid var(--slate-700);
+border-radius:8px;color:var(--slate-100);
+font-family:'JetBrains Mono',monospace;font-size:14px;
+transition:border-color 0.2s;
+}
+.alias-input:focus{outline:none;border-color:var(--amber-500)}
+.alias-input::placeholder{color:var(--slate-600)}
+.resolve-btn{
+align-self:flex-end;padding:12px 24px;
+background:var(--amber-500);color:var(--slate-950);
+border:none;border-radius:8px;font-family:'JetBrains Mono',monospace;
+font-size:13px;font-weight:700;cursor:pointer;
+transition:all 0.2s;
+}
+.resolve-btn:hover{background:var(--amber-400)}
+.resolve-btn:disabled{opacity:0.4;cursor:not-allowed}
+
+/* Step 2: Resolution animation */
+.resolution-flow{display:flex;flex-direction:column;gap:12px}
+.flow-row{
+display:flex;align-items:center;gap:12px;
+padding:12px 16px;border-radius:8px;
+background:var(--slate-800);
+opacity:0;transform:translateX(-20px);
+transition:all 0.4s ease;
+font-size:13px;
+}
+.flow-row.visible{opacity:1;transform:translateX(0)}
+.flow-icon{font-size:18px;flex-shrink:0}
+.flow-label{color:var(--slate-500);min-width:70px}
+.flow-value{color:var(--slate-100);word-break:break-all}
+.flow-arrow{
+text-align:center;color:var(--amber-500);font-size:18px;
+opacity:0;transition:opacity 0.3s;
+}
+.flow-arrow.visible{opacity:1}
+.status-badge{
+display:inline-flex;align-items:center;gap:6px;
+padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;
+}
+.status-ok{background:rgba(34,197,94,0.12);color:var(--green-400);border:1px solid rgba(34,197,94,0.2)}
+.status-fail{background:rgba(239,68,68,0.12);color:var(--red-400);border:1px solid rgba(239,68,68,0.2)}
+
+/* Step 3: Dashboard */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dash-tile{
+padding:20px 16px;border-radius:10px;
+background:var(--slate-800);text-align:center;
+transition:all 0.3s;cursor:pointer;
+border:1px solid transparent;
+}
+.dash-tile:hover{border-color:var(--slate-600)}
+.dash-tile.highlight{border-color:var(--amber-500);background:rgba(245,158,11,0.06)}
+.dash-number{
+font-size:28px;font-weight:800;
+color:var(--amber-400);margin-bottom:4px;
+}
+.dash-label{font-size:11px;color:var(--slate-500);text-transform:uppercase;letter-spacing:1px}
+.dash-number .counter{transition:all 0.3s}
+
+/* Step 4: Drag list */
+.check-list{display:flex;flex-direction:column;gap:8px}
+.check-item{
+display:flex;align-items:center;gap:12px;
+padding:14px 16px;border-radius:8px;
+background:var(--slate-800);
+cursor:pointer;transition:all 0.3s;
+user-select:none;
+border:1px solid transparent;
+}
+.check-item:hover{border-color:var(--slate-600)}
+.check-item.checked{border-color:var(--green-500);background:rgba(34,197,94,0.06)}
+.check-box{
+width:22px;height:22px;border-radius:6px;
+border:2px solid var(--slate-600);
+display:flex;align-items:center;justify-content:center;
+transition:all 0.2s;flex-shrink:0;
+font-size:14px;color:transparent;
+}
+.check-item.checked .check-box{
+border-color:var(--green-500);background:var(--green-500);color:var(--slate-950);
+}
+.check-text{font-size:13px;color:var(--slate-300)}
+.check-item.checked .check-text{color:var(--green-400)}
+.checklist-progress{
+margin-top:16px;height:6px;border-radius:3px;
+background:var(--slate-800);overflow:hidden;
+}
+.checklist-bar{
+height:100%;border-radius:3px;
+background:linear-gradient(90deg,var(--amber-600),var(--green-500));
+transition:width 0.4s ease;width:0;
+}
+
+/* Step 5: Booking */
+.book-form{display:flex;flex-direction:column;gap:14px}
+.book-input{
+width:100%;padding:14px 16px;
+background:var(--slate-800);border:1px solid var(--slate-700);
+border-radius:8px;color:var(--slate-100);
+font-family:'JetBrains Mono',monospace;font-size:14px;
+}
+.book-input:focus{outline:none;border-color:var(--amber-500)}
+.book-input::placeholder{color:var(--slate-600)}
+.book-submit{
+padding:14px;background:var(--amber-500);color:var(--slate-950);
+border:none;border-radius:8px;font-family:'JetBrains Mono',monospace;
+font-size:14px;font-weight:700;cursor:pointer;transition:all 0.2s;
+}
+.book-submit:hover{background:var(--amber-400)}
+.sparkle{
+position:absolute;pointer-events:none;
+font-size:20px;animation:sparkleAnim 0.6s ease forwards;
+}
+@keyframes sparkleAnim{
+0%{opacity:1;transform:scale(0) rotate(0deg)}
+50%{opacity:1;transform:scale(1.2) rotate(180deg)}
+100%{opacity:0;transform:scale(0.5) rotate(360deg) translateY(-30px)}
+}
+
+/* Keyboard hint */
+.key-hint{
+position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+font-size:11px;color:var(--slate-600);z-index:99;
+}
+.key-hint kbd{
+padding:2px 8px;border-radius:4px;
+background:var(--slate-800);border:1px solid var(--slate-700);
+font-family:'JetBrains Mono',monospace;
+}
+
+/* Caveman ASCII */
+.caveman{
+font-size:clamp(40px,8vw,72px);
+text-align:center;margin-bottom:12px;
+filter:grayscale(0.2);
+}
+
+@media(max-width:600px){
+.widget{padding:20px;max-width:100%}
+.dash-grid{grid-template-columns:1fr}
+.nav-buttons{bottom:16px}
+.btn{padding:10px 20px;font-size:13px}
+.step{padding:70px 16px 100px}
+}
+</style>
+</head>
+<body>
+<div class="step-indicator hidden" id="stepIndicator" role="navigation" aria-label="Tour progress">
+<span class="brand-sm">aliasfix</span>
+<div class="step-dots" id="stepDots"></div>
+<span class="step-label" id="stepLabel"></span>
+</div>
+<div class="progress-bar" id="progressBar" style="width:0%" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+
+<div class="key-hint hidden" id="keyHint"><kbd>←</kbd> <kbd>→</kbd> arrow keys to navigate</div>
+
+<!-- HERO: Step 0 -->
+<div class="step active" id="step0" aria-live="polite">
+<div class="caveman">🪨🦴</div>
+<div class="badge">even caveman can use</div>
+<h1 class="hero-title">aliasfix</h1>
+<p class="hero-sub">Your Vercel alias says it points somewhere. But does it <em>actually</em> resolve? Two clicks. Real answer. No brain wrinkles required.</p>
+<button class="btn btn-primary hero-cta" onclick="goToStep(1)">Start tour →</button>
+</div>
+
+<!-- STEP 1: Enter Alias -->
+<div class="step" id="step1" aria-live="polite">
+<div class="badge">Step 1</div>
+<h2 class="step-title">Paste Your Alias 🦴</h2>
+<p class="step-desc">Type a Vercel alias URL. aliasfix grabs it and starts sniffing where it actually leads. Simple as bonking rock.</p>
+<div class="widget">
+<div class="widget-header">
+<div class="dot-row"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+<span class="widget-title">aliasfix resolver</span>
+</div>
+<div class="alias-input-group">
+<input type="text" class="alias-input" id="aliasInput" placeholder="my-app.vercel.app" value="" autocomplete="off" spellcheck="false">
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button class="resolve-btn" style="font-size:11px;padding:8px 14px;background:var(--slate-700);color:var(--slate-300)" onclick="fillExample('cool-saas.vercel.app')">try: cool-saas</button>
+<button class="resolve-btn" style="font-size:11px;padding:8px 14px;background:var(--slate-700);color:var(--slate-300)" onclick="fillExample('broken-link.vercel.app')">try: broken-link</button>
+<button class="resolve-btn" id="resolveBtn" onclick="runResolve()">Resolve →</button>
+</div>
+<div id="resolveStatus" style="font-size:12px;min-height:20px;color:var(--slate-500)"></div>
+</div>
+</div>
+</div>
+
+<!-- STEP 2: Resolution Result -->
+<div class="step" id="step2" aria-live="polite">
+<div class="badge">Step 2</div>
+<h2 class="step-title">Watch It Resolve ⚡</h2>
+<p class="step-desc">aliasfix traces the full resolution chain — DNS, CNAME, final destination. You see exactly where your alias goes. Or doesn't.</p>
+<div class="widget">
+<div class="widget-header">
+<div class="dot-row"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+<span class="widget-title">resolution trace</span>
+</div>
+<div class="resolution-flow" id="resolutionFlow">
+<div class="flow-row" id="flow1">
+<span class="flow-icon">🔗</span>
+<span class="flow-label">Alias</span>
+<span class="flow-value" id="flowAlias">—</span>
+</div>
+<div class="flow-arrow" id="arrow1">↓</div>
+<div class="flow-row" id="flow2">
+<span class="flow-icon">🌐</span>
+<span class="flow-label">DNS</span>
+<span class="flow-value" id="flowDns">—</span>
+</div>
+<div class="flow-arrow" id="arrow2">↓</div>
+<div class="flow-row" id="flow3">
+<span class="flow-icon">📡</span>
+<span class="flow-label">CNAME</span>
+<span class="flow-value" id="flowCname">—</span>
+</div>
+<div class="flow-arrow" id="arrow3">↓</div>
+<div class="flow-row" id="flow4">
+<span class="flow-icon">🎯</span>
+<span class="flow-label">Target</span>
+<span class="flow-value" id="flowTarget">—</span>
+</div>
+<div style="text-align:center;margin-top:12px" id="flowStatus"></div>
+</div>
+<button class="resolve-btn" style="margin-top:16px;width:100%" id="replayBtn" onclick="replayResolution()">🔄 Replay trace</button>
+</div>
+</div>
+
+<!-- STEP 3: Dashboard -->
+<div class="step" id="step3" aria-live="polite">
+<div class="badge">Step 3</div>
+<h2 class="step-title">Your Alias Health 📊</h2>
+<p class="step-desc">aliasfix tracks every alias you verify. Click any tile to see it pulse. This is what peace of mind looks like for a caveman.</p>
+<div class="widget">
+<div class="widget-header">
+<div class="dot-row"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+<span class="widget-title">dashboard</span>
+</div>
+<div class="dash-grid" id="dashGrid">
+<div class="dash-tile" onclick="toggleTile(this)" data-target="147">
+<div class="dash-number"><span class="counter" data-val="147">0</span></div>
+<div class="dash-label">Aliases Checked</div>
+</div>
+<div class="dash-tile" onclick="toggleTile(this)" data-target="142">
+<div class="dash-number" style="color:var(--green-400)"><span class="counter" data-val="142">0</span></div>
+<div class="dash-label">Resolved OK</div>
+</div>
+<div class="dash-tile" onclick="toggleTile(this)" data-target="5">
+<div class="dash-number" style="color:var(--red-400)"><span class="counter" data-val="5">0</span></div>
+<div class="dash-label">Broken</div>
+</div>
+<div class="dash-tile" onclick="toggleTile(this)" data-target="23">
+<div class="dash-number"><span class="counter" data-val="23">0</span></div>
+<div class="dash-label">Avg ms</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- STEP 4: Checklist -->
+<div class="step" id="step4" aria-live="polite">
+<div class="badge">Step 4</div>
+<h2 class="step-title">Verification Checklist ✅</h2>
+<p class="step-desc">Every resolve runs through these checks. Click each one to see what aliasfix does behind the scenes. Even caveman understand checkboxes.</p>
+<div class="widget">
+<div class="widget-header">
+<div class="dot-row"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+<span class="widget-title">verify pipeline</span>
+</div>
+<div class="check-list" id="checkList">
+<div class="check-item" onclick="toggleCheck(this)">
+<div class="check-box">✓</div>
+<span class="check-text">DNS A/AAAA record lookup</span>
+</div>
+<div class="check-item" onclick="toggleCheck(this)">
+<div class="check-box">✓</div>
+<span class="check-text">CNAME chain resolution</span>
+</div>
+<div class="check-item" onclick="toggleCheck(this)">
+<div class="check-box">✓</div>
+<span class="check-text">SSL certificate validation</span>
+</div>
+<div class="check-item" onclick="toggleCheck(this)">
+<div class="check-box">✓</div>
+<span class="check-text">HTTP 200 response confirmed</span>
+</div>
+<div class="check-item" onclick="toggleCheck(this)">
+<div class="check-box">✓</div>
+<span class="check-text">Final URL matches expected target</span>
+</div>
+</div>
+<div class="checklist-progress"><div class="checklist-bar" id="checklistBar"></div></div>
+</div>
+</div>
+
+<!-- STEP 5: Booking -->
+<div class="step" id="step5" aria-live="polite">
+<div class="badge">Final Step</div>
+<h2 class="step-title">Want This? 🪨</h2>
+<p class="step-desc">Stop guessing if your aliases work. Book a 15-minute demo and we'll show you how aliasfix protects your deploys. Even caveman can fill out form.</p>
+<div class="widget">
+<div class="widget-header">
+<div class="dot-row"><span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span></div>
+<span class="widget-title">book a demo</span>
+</div>
+<form class="book-form" id="bookForm" onsubmit="return handleBook(event)">
+<input type="text" class="book-input" placeholder="Your name (caveman ok)" id="bookName" required>
+<input type="email" class="book-input" placeholder="your@email.rock" id="bookEmail" required>
+<input type="text" class="book-input" placeholder="Company / Tribe name" id="bookCompany">
+<button type="submit" class="book-submit">Book 15-min Demo 🦴→</button>
+</form>
+<div id="bookConfirm" style="display:none;text-align:center;padding:20px">
+<div style="font-size:40px;margin-bottom:12px">🎉</div>
+<div style="color:var(--green-400);font-weight:700;font-size:16px;margin-bottom:8px">Booked!</div>
+<div style="color:var(--slate-400);font-size:13px" id="bookMsg"></div>
+</div>
+</div>
+</div>
+
+<!-- Nav buttons -->
+<div class="nav-buttons hidden" id="navButtons">
+<button class="btn btn-secondary" id="btnBack" onclick="prevStep()">← Back</button>
+<button class="btn btn-primary" id="btnNext" onclick="nextStep()">Next →</button>
+</div>
+
+<script>
+let currentStep = 0;
+const totalSteps = 5;
+let resolvedAlias = '';
+let resolvedBroken = false;
+
+const aliasDB = {
+'cool-saas.vercel.app': {
+dns: '76.76.21.21',
+cname: 'cname.vercel-dns.com',
+target: 'https://cool-saas-git-main-acme.vercel.app',
+ok: true
+},
+'broken-link.vercel.app': {
+dns: '76.76.21.21',
+cname: 'cname.vercel-dns.com',
+target: 'ENOTFOUND — no deployment',
+ok: false
+},
+'default': {
+dns: '76.76.21.21',
+cname: 'cname.vercel-dns.com',
+target: null,
+ok: true
+}
+};
+
+function goToStep(n) {
+if (n < 0 || n > totalSteps) return;
+document.getElementById('step' + currentStep).classList.remove('active');
+currentStep = n;
+document.getElementById('step' + currentStep).classList.add('active');
+updateIndicator();
+updateNav();
+if (n === 2) triggerResolution();
+if (n === 3) animateCounters();
+}
+
+function nextStep() { goToStep(currentStep + 1); }
+function prevStep() { goToStep(currentStep - 1); }
+
+function updateIndicator() {
+const ind = document.getElementById('stepIndicator');
+const hint = document.getElementById('keyHint');
+if (currentStep === 0) {
+ind.classList.add('hidden');
+hint.classList.add('hidden');
+} else {
+ind.classList.remove('hidden');
+hint.classList.remove('hidden');
+}
+const dots = document.getElementById('stepDots');
+dots.innerHTML = '';
+for (let i = 1; i <= totalSteps; i++) {
+const d = document.createElement('span');
+d.className = 'step-dot' + (i === currentStep ? ' active' : '') + (i < currentStep ? ' done' : '');
+dots.appendChild(d);
+}
+document.getElementById('stepLabel').textContent = currentStep + '/' + totalSteps;
+const pct = (currentStep / totalSteps) * 100;
+const pb = document.getElementById('progressBar');
+pb.style.width = pct + '%';
+pb.setAttribute('aria-valuenow', pct);
+}
+
+function updateNav() {
+const nb = document.getElementById('navButtons');
+if (currentStep === 0) {
+nb.classList.add('hidden');
+} else {
+nb.classList.remove('hidden');
+}
+document.getElementById('btnBack').disabled = currentStep <= 1;
+document.getElementById('btnNext').style.display = currentStep >= totalSteps ? 'none' : '';
+}
+
+function fillExample(val) {
+document.getElementById('aliasInput').value = val;
+document.getElementById('resolveStatus').textContent = '';
+}
+
+function runResolve() {
+const input = document.getElementById('aliasInput').value.trim();
+if (!input) {
+document.getElementById('resolveStatus').innerHTML = '<span style="color:var(--red-400)">⚠ type alias first, caveman</span>';
+return;
+}
+resolvedAlias = input;
+const db = aliasDB[input] || aliasDB['default'];
+if (!db.target) {
+const clean = input.replace(/\.vercel\.app$/, '').replace(/[^a-z0-9-]/gi, '') || 'my-app';
+db.target = 'https://' + clean + '-git-main-team.vercel.app';
+}
+resolvedBroken = !db.ok;
+document.getElementById('resolveStatus').innerHTML = '<span style="color:var(--green-400)">✓ Alias captured. Hit Next → to see the trace.</span>';
+}
+
+function triggerResolution() {
+const db = aliasDB[resolvedAlias] || aliasDB['default'];
+if (!db.target) {
+const clean = resolvedAlias.replace(/\.vercel\.app$/, '').replace(/[^a-z0-9-]/gi, '') || 'my-app';
+db.target = 'https://' + clean + '-git-main-team.vercel.app';
+}
+
+document.getElementById('flowAlias').textContent = resolvedAlias || 'my-app.vercel.app';
+document.getElementById('flowDns').textContent = '—';
+document.getElementById('flowCname').textContent = '—';
+document.getElementById('flowTarget').textContent = '—';
+document.getElementById('flowStatus').innerHTML = '';
+
+['flow1','flow2','flow3','flow4'].forEach(id => document.getElementById(id).classList.remove('visible'));
+['arrow1','arrow2','arrow3'].forEach(id => document.getElementById(id).classList.remove('visible'));
+
+const steps = [
+() => { document.getElementById('flow1').classList.add('visible'); },
+() => { document.getElementById('arrow1').classList.add('visible'); },
+() => { document.getElementById('flow2').classList.add('visible'); document.getElementById('flowDns').textContent = db.dns; },
+() => { document.getElementById('arrow2').classList.add('visible'); },
+() => { document.getElementById('flow3').classList.add('visible'); document.getElementById('flowCname').textContent = db.cname; },
+() => { document.getElementById('arrow3').classList.add('visible'); },
+() => {
+document.getElementById('flow4').classList.add('visible');
+document.getElementById('flowTarget').textContent = db.target;
+if (db.ok) {
+document.getElementById('flowStatus').innerHTML = '<span class="status-badge status-ok">✓ Alias resolves correctly</span>';
+} else {
+document.getElementById('flowStatus').innerHTML = '<span class="status-badge status-fail">✗ Resolution failed</span>';
+}
+}
+];
+
+steps.forEach((fn, i) => setTimeout(fn, (i + 1) * 350));
+}
+
+function replayResolution() {
+triggerResolution();
+}
+
+function animateCounters() {
+document.querySelectorAll('.counter').forEach(el => {
+const target = parseInt(el.dataset.val);
+let current = 0;
+const step = Math.max(1, Math.ceil(target / 40));
+el.textContent = '0';
+const interval = setInterval(() => {
+current += step;
+if (current >= target) {
+current = target;
+clearInterval(interval);
+}
+el.textContent = current;
+}, 30);
+});
+}
+
+function toggleTile(el) {
+document.querySelectorAll('.dash-tile').forEach(t => t.classList.remove('highlight'));
+el.classList.add('highlight');
+const counter = el.querySelector('.counter');
+const val = parseInt(counter.dataset.val);
+counter.textContent = '0';
+let c = 0;
+const s = Math.max(1, Math.ceil(val / 25));
+const iv = setInterval(() => {
+c += s;
+if (c >= val) { c = val; clearInterval(iv); }
+counter.textContent = c;
+}, 25);
+}
+
+function toggleCheck(el) {
+el.classList.toggle('checked');
+updateChecklistBar();
+}
+
+function updateChecklistBar() {
+const items = document.querySelectorAll('.check-item');
+const checked = document.querySelectorAll('.check-item.checked').length;
+const pct = (checked / items.length) * 100;
+document.getElementById('checklistBar').style.width = pct + '%';
+}
+
+function handleBook(e) {
+e.preventDefault();
+const name = document.getElementById('bookName').value;
+const email = document.getElementById('bookEmail').value;
+const company = document.getElementById('bookCompany').value || 'Solo Caveman';
+
+const futureDate = new Date();
+futureDate.setDate(futureDate.getDate() + 3);
+const dateStr = futureDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+document.getElementById('bookForm').style.display = 'none';
+document.getElementById('bookConfirm').style.display = 'block';
+document.getElementById('bookMsg').textContent =
+'Booked for ' + dateStr + ' at 2:00 PM. See you there, ' + name + ' from ' + company + '! Check ' + email + ' for confirmation.';
+
+// sparkles
+for (let i = 0; i < 6; i++) {
+setTimeout(() => {
+const sp = document.createElement('span');
+sp.className = 'sparkle';
+sp.textContent = ['✨','⚡','🪨','🦴','💛','🔥'][i];
+sp.style.left = (30 + Math.random() * 40) + '%';
+sp.style.top = (30 + Math.random() * 30) + '%';
+document.getElementById('step5').appendChild(sp);
+setTimeout(() => sp.remove(), 700);
+}, i * 100);
+}
+
+return false;
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+if (e.key === 'ArrowRight' || e.key === 'Right') {
+if (currentStep === 0) goToStep(1);
+else if (currentStep < totalSteps) nextStep();
+} else if (e.key === 'ArrowLeft' || e.key === 'Left') {
+if (currentStep > 1) prevStep();
+}
+});
+
+// Init
+updateIndicator();
+updateNav();
+</script>
+</body>
+</html>
